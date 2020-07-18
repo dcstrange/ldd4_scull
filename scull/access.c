@@ -35,6 +35,9 @@
 #include <linux/cred.h>
 #endif
 
+#if  LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 125)
+#include <linux/sched/signal.h> 
+#endif 
 #include "scull.h"        /* local definitions */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 27)

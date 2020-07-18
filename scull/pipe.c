@@ -29,6 +29,11 @@
 #include <asm/uaccess.h>
 #include <linux/sched.h>
 
+#include <linux/version.h>
+#if  LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 125)
+#include <linux/sched/signal.h> /* for kernel v4.19.125 */
+#endif
+
 #include "scull.h"		/* local definitions */
 
 struct scull_pipe {

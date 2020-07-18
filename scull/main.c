@@ -31,7 +31,12 @@
 #include <linux/cdev.h>
 #include <linux/mutex.h>
 
-#include <asm/uaccess.h>	/* copy_*_user */
+#include <linux/version.h>
+#if  LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 125)
+#include <linux/uaccess.h>	/* copy_*_user */
+#else
+#include <asm/uaccess.h>
+#endif
 
 #include "scull.h"		/* local definitions */
 
