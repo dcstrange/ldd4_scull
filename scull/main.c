@@ -35,7 +35,7 @@
 #if  LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 125)
 #include <linux/uaccess.h>	/* copy_*_user */
 #else
-#include <asm/uaccess.h>
+#include <asm/uaccess.h>	/* isn't found in v4.19.125 */
 #endif
 
 #include "scull.h"		/* local definitions */

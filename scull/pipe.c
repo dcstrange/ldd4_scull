@@ -26,7 +26,7 @@
 #include <linux/fcntl.h>
 #include <linux/poll.h>
 #include <linux/cdev.h>
-#include <asm/uaccess.h>
+#include <asm/uaccess.h>	/* isn't found in v4.19.125 */
 #include <linux/sched.h>
 
 #include <linux/version.h>

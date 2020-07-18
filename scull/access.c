@@ -26,7 +26,7 @@
 #include <linux/fcntl.h>
 #include <linux/cdev.h>
 #include <linux/tty.h>
-#include <asm/atomic.h>
+#include <asm/atomic.h>	/* isn't found in v4.19.125 */
 #include <linux/list.h>
 
 #include <linux/version.h>
