@@ -21,7 +21,7 @@
 #include <linux/init.h>
 
 #include <linux/kernel.h>	/* printk() */
-#include <linux/slab.h>		/* kmalloc() */
+#include <linux/slab.h>		/* kmalloc(), [fei]- kzalloc() */
 #include <linux/fs.h>		/* everything... */
 #include <linux/errno.h>	/* error codes */
 #include <linux/types.h>	/* size_t */
@@ -260,32 +260,44 @@ int scull_release(struct inode *inode, struct file *filp)
 {
 	return 0;
 }
-/*
- * Follow the list
- */
+
 struct scull_qset *scull_follow(struct scull_dev *dev, int n)
 {
-	struct scull_qset *qs = dev->data;
+	struct scull_qset *qs = dev->data; 
 
-        /* Allocate first qset explicitly if need be */
 	if (! qs) {
-		qs = dev->data = kmalloc(sizeof(struct scull_qset), GFP_KERNEL);
+		qs = dev->data = kzalloc(sizeof(struct scull_qset), GFP_KERNEL);
 		if (qs == NULL)
 			return NULL;  /* Never mind */
-		memset(qs, 0, sizeof(struct scull_qset));
 	}
 
 	/* Then follow the list */
 	while (n--) {
 		if (!qs->next) {
-			qs->next = kmalloc(sizeof(struct scull_qset), GFP_KERNEL);
+			qs->next = kzalloc(sizeof(struct scull_qset), GFP_KERNEL);
 			if (qs->next == NULL)
 				return NULL;  /* Never mind */
-			memset(qs->next, 0, sizeof(struct scull_qset));
 		}
 		qs = qs->next;
 		continue;
 	}
+	return qs;
+}
+
+/*
+ * check the list
+ */
+struct scull_qset *scull_follow_check(struct scull_dev *dev, int n)
+{
+	struct scull_qset *qs = dev->data; 
+
+	while(n--) {
+		if(qs == NULL) 
+			return NULL;
+		qs = qs->next;
+		continue;
+	}
+	
 	return qs;
 }
 
@@ -316,7 +328,7 @@ ssize_t scull_read(struct file *filp, char __user *buf, size_t count,
 	s_pos = rest / quantum; q_pos = rest % quantum;
 
 	/* follow the list up to the right position (defined elsewhere) */
-	dptr = scull_follow(dev, item);
+	dptr = scull_follow_check(dev, item);	// [fei]- If the "struct scull_qset" of the position is not be allocated yet, then kmalloc() it. 
 
 	if (dptr == NULL || !dptr->data || ! dptr->data[s_pos])
 		goto out; /* don't fill holes */
@@ -325,12 +337,16 @@ ssize_t scull_read(struct file *filp, char __user *buf, size_t count,
 	if (count > quantum - q_pos)
 		count = quantum - q_pos;
 
-	if (copy_to_user(buf, dptr->data[s_pos] + q_pos, count)) {
+	/* [fei]- the return value of copy_*_user() is the amount of memory still to be copied. 
+	 * driver has to return how many bytes are succeed to copy, unless the number is zero where it return the -EFAULT. */
+	size_t bytes_success = count - copy_to_user(buf, dptr->data[s_pos] + q_pos, count);
+	if (bytes_success == 0) { 
 		retval = -EFAULT;
 		goto out;
 	}
-	*f_pos += count;
-	retval = count;
+
+	*f_pos += bytes_success;
+	retval = bytes_success;
 
   out:
 	mutex_unlock(&dev->mut);
@@ -356,7 +372,7 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count,
 	s_pos = rest / quantum; q_pos = rest % quantum;
 
 	/* follow the list up to the right position */
-	dptr = scull_follow(dev, item);
+	dptr = scull_follow(dev, item); // [fei]- If the quantum of the position is not be allocated yet, then kmalloc() it. 
 	if (dptr == NULL)
 		goto out;
 	if (!dptr->data) {
@@ -375,6 +391,8 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count,
 		count = quantum - q_pos;
 
 	if (copy_from_user(dptr->data[s_pos]+q_pos, buf, count)) {
+		/* [fei]- the return value of copy_*_user() is the amount of memory still to be copied. 
+		 * The scull code looks for this error return, and returns -EFAULT to the user if it’s not 0.*/
 		retval = -EFAULT;
 		goto out;
 	}
@@ -629,7 +647,7 @@ int scull_init_module(void)
 		dev = MKDEV(scull_major, scull_minor);
 		result = register_chrdev_region(dev, scull_nr_devs, "scull");
 	} else {
-		result = alloc_chrdev_region(&dev, scull_minor, scull_nr_devs,
+		result = alloc_chrdev_region(&dev /* [fei]- return the allocated device number */, scull_minor, scull_nr_devs,
 				"scull");
 		scull_major = MAJOR(dev);
 	}
@@ -642,19 +660,19 @@ int scull_init_module(void)
 	 * allocate the devices -- we can't have them static, as the number
 	 * can be specified at load time
 	 */
-	scull_devices = kmalloc(scull_nr_devs * sizeof(struct scull_dev), GFP_KERNEL);
+	scull_devices = kzalloc(scull_nr_devs * sizeof(struct scull_dev), GFP_KERNEL); // [fei]- change the kmalloc() + memset(zero) to kzmalloc()
 	if (!scull_devices) {
 		result = -ENOMEM;
 		goto fail;  /* Make this more graceful */
 	}
-	memset(scull_devices, 0, scull_nr_devs * sizeof(struct scull_dev));
+	//memset(scull_devices, 0, scull_nr_devs * sizeof(struct scull_dev));
 
         /* Initialize each device. */
 	for (i = 0; i < scull_nr_devs; i++) {
 		scull_devices[i].quantum = scull_quantum;
 		scull_devices[i].qset = scull_qset;
 		mutex_init(&scull_devices[i].mut);
-		scull_setup_cdev(&scull_devices[i], i);
+		scull_setup_cdev(&scull_devices[i], i); // [fei]- cdev_init() + cdev_add()
 	}
 
         /* At this point call the init function for any friend device */
