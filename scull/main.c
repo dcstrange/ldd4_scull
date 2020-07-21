@@ -40,6 +40,10 @@
 
 #include "scull.h"		/* local definitions */
 
+#define DEBUG_SCULL_IO
+#ifdef DEBUG_SCULL_IO
+#	define DEBUG_IO_printk(fmt, args...) printk(KERN_DEBUG "scull_io_debug: " fmt, ## args)
+#endif
 /*
  * Our parameters which can be set at load time.
  */
@@ -55,7 +59,6 @@ module_param(scull_minor, int, S_IRUGO);
 module_param(scull_nr_devs, int, S_IRUGO);
 module_param(scull_quantum, int, S_IRUGO);
 module_param(scull_qset, int, S_IRUGO);
-
 MODULE_AUTHOR("Alessandro Rubini, Jonathan Corbet");
 MODULE_LICENSE("Dual BSD/GPL");
 
@@ -315,6 +318,7 @@ ssize_t scull_read(struct file *filp, char __user *buf, size_t count,
 	int item, s_pos, q_pos, rest;
 	ssize_t retval = 0;
 
+	DEBUG_IO_printk("READ req for %lu bytes\n", count);
 	if (mutex_lock_interruptible(&dev->mut))
 		return -ERESTARTSYS;
 	if (*f_pos >= dev->size)
@@ -345,10 +349,15 @@ ssize_t scull_read(struct file *filp, char __user *buf, size_t count,
 		goto out;
 	}
 
+	// Debug code
+	DEBUG_IO_printk("\tsucceed: %lu bytes. \n", bytes_success); 
+
 	*f_pos += bytes_success;
 	retval = bytes_success;
 
   out:
+	if(retval <= 0)
+  		DEBUG_IO_printk("\tfail: %lu\n", retval);
 	mutex_unlock(&dev->mut);
 	return retval;
 }
@@ -363,6 +372,7 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count,
 	int item, s_pos, q_pos, rest;
 	ssize_t retval = -ENOMEM; /* value used in "goto out" statements */
 
+	DEBUG_IO_printk("WRITE req for %lu bytes\n", count);
 	if (mutex_lock_interruptible(&dev->mut))
 		return -ERESTARTSYS;
 
@@ -390,20 +400,25 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count,
 	if (count > quantum - q_pos)
 		count = quantum - q_pos;
 
-	if (copy_from_user(dptr->data[s_pos]+q_pos, buf, count)) {
+	size_t bytes_success = count - copy_from_user(dptr->data[s_pos]+q_pos, buf, count);
+	if (bytes_success == 0 ) {
 		/* [fei]- the return value of copy_*_user() is the amount of memory still to be copied. 
 		 * The scull code looks for this error return, and returns -EFAULT to the user if it’s not 0.*/
 		retval = -EFAULT;
 		goto out;
 	}
-	*f_pos += count;
-	retval = count;
+	*f_pos += bytes_success;
+	retval = bytes_success;
+
+	DEBUG_IO_printk("\tsucceed: %lu bytes. \n", bytes_success); 
 
         /* update the size */
 	if (dev->size < *f_pos)
 		dev->size = *f_pos;
 
   out:
+	if(retval <= 0)
+  		DEBUG_IO_printk("\tfail: %lu\n", retval);
 	mutex_unlock(&dev->mut);
 	return retval;
 }
@@ -652,7 +667,7 @@ int scull_init_module(void)
 		scull_major = MAJOR(dev);
 	}
 	if (result < 0) {
-		printk(KERN_WARNING "scull: can't get major %d\n", scull_major);
+		printk(KERN_WARNING "scull: can't get major %d", scull_major);
 		return result;
 	}
 
