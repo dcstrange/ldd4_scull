@@ -96,35 +96,35 @@ int scull_trim(struct scull_dev *dev)
  * The proc filesystem: function to read and entry
  */
 
-int scull_read_procmem(char *buf, char **start, off_t offset,
-                   int count, int *eof, void *data)
-{
-	int i, j, len = 0;
-	int limit = count - 80; /* Don't print more than this */
+// int scull_read_procmem(char *buf, char **start, off_t offset,
+//                    int count, int *eof, void *data)
+// {
+// 	int i, j, len = 0;
+// 	int limit = count - 80; /* Don't print more than this */
 
-	for (i = 0; i < scull_nr_devs && len <= limit; i++) {
-		struct scull_dev *d = &scull_devices[i];
-		struct scull_qset *qs = d->data;
-		if (mutex_lock_interruptible(&d->mut))
-			return -ERESTARTSYS;
-		len += sprintf(buf+len,"\nDevice %i: qset %i, q %i, sz %li\n",
-				i, d->qset, d->quantum, d->size);
-		for (; qs && len <= limit; qs = qs->next) { /* scan the list */
-			len += sprintf(buf + len, "  item at %p, qset at %p\n",
-					qs, qs->data);
-			if (qs->data && !qs->next) /* dump only the last item */
-				for (j = 0; j < d->qset; j++) {
-					if (qs->data[j])
-						len += sprintf(buf + len,
-								"    % 4i: %8p\n",
-								j, qs->data[j]);
-				}
-		}
-		mutex_unlock(&scull_devices[i].mut);
-	}
-	*eof = 1;
-	return len;
-}
+// 	for (i = 0; i < scull_nr_devs && len <= limit; i++) {
+// 		struct scull_dev *d = &scull_devices[i];
+// 		struct scull_qset *qs = d->data;
+// 		if (mutex_lock_interruptible(&d->mut))
+// 			return -ERESTARTSYS;
+// 		len += sprintf(buf+len,"\nDevice %i: qset %i, q %i, sz %li\n",
+// 				i, d->qset, d->quantum, d->size);
+// 		for (; qs && len <= limit; qs = qs->next) { /* scan the list */
+// 			len += sprintf(buf + len, "  item at %p, qset at %p\n",
+// 					qs, qs->data);
+// 			if (qs->data && !qs->next) /* dump only the last item */
+// 				for (j = 0; j < d->qset; j++) {
+// 					if (qs->data[j])
+// 						len += sprintf(buf + len,
+// 								"    % 4i: %8p\n",
+// 								j, qs->data[j]);
+// 				}
+// 		}
+// 		mutex_unlock(&scull_devices[i].mut);
+// 	}
+// 	*eof = 1;
+// 	return len;
+// }
 
 
 /*
@@ -218,16 +218,24 @@ static struct file_operations scull_proc_ops = {
 static void scull_create_proc(void)
 {
 	struct proc_dir_entry *entry;
-	proc_create_data("scullmem", 0 /* default mode */,
-			NULL /* parent dir */, scull_read_procmem,
-			NULL /* client data */);
+	/* [fei]- create_proc_read_entry()已经被弃用了,将其替换为 proc_create()和 proc_create_data()并使用seq_file工具。
+	 * See https://lkml.org/lkml/2013/4/11/215,
+	 * where says "Here is a series of patches to eliminate create_proc_read_entry(), replacing it
+	 * with proc_create() and proc_create_data() and the use of seq_file facilities." */
+
+	// proc_create_data("scullmem", 0 /* default mode */,
+	// 		NULL /* parent dir */, scull_read_procmem,
+	// 		NULL /* client data */);
 	entry = proc_create("scullseq", 0, NULL, &scull_proc_ops);
+	if(!entry){
+		PDEBUG("Cannot create the /proc entr.\n");
+	}
 }
 
 static void scull_remove_proc(void)
 {
 	/* no problem if it was not registered */
-	remove_proc_entry("scullmem", NULL /* parent dir */);
+	//remove_proc_entry("scullmem", NULL /* parent dir */);
 	remove_proc_entry("scullseq", NULL);
 }
 
