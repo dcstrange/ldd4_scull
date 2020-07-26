@@ -26,8 +26,11 @@
 #define __LIBRARY__ /* _syscall3 and friends are only available through this */
 #include <linux/unistd.h>
 
+
 /* define the system call, to override the library function */
-_syscall3(int, syslog, int, type, char *, bufp, int, len);
+/* [fei]- 这里显示声明syslog(2)系统调用，是因为glibc中有同样符号名称的函数（但不用的用途），避免混淆。
+ * syslog(2)系统调用的glibc接口是klogctl(3)，声明于 <sys/klog.h>。*/
+_syscall3(int, syslog, int, type, char *, bufp, int, len); 
 
 int main(int argc, char **argv)
 {
@@ -38,7 +41,7 @@ int main(int argc, char **argv)
     } else {
         fprintf(stderr, "%s: need a single arg\n",argv[0]); exit(1);
     }
-    if (syslog(8,NULL,level) < 0) {  
+    if (syslog(8,NULL,level) < 0) {  // [fei]- 查看syslog(2)的man page关于第一个参数的说明。https://man7.org/linux/man-pages/man2/syslog.2.html
         fprintf(stderr,"%s: syslog(setlevel): %s\n",
                 argv[0],strerror(errno));
         exit(1);
